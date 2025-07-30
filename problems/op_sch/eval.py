@@ -70,7 +70,7 @@ if __name__ == "__main__":
 
     if mood == "train":
         print(f"[*] Dataset loaded.")
-        benchmark_dir = os.path.join(basepath, "benchmark")
+        benchmark_dir = os.path.join(basepath, "datasets/operator_scheduling/demo")
         results_dir = os.path.join(basepath, "results")
         os.makedirs(results_dir, exist_ok=True)
         input_files = sorted(glob.glob(os.path.join(benchmark_dir, "*.json")))
@@ -84,19 +84,5 @@ if __name__ == "__main__":
         print(np.mean(objs))
 
     else:
-        for problem_size in [20, 50, 100]:
-            dataset_path = os.path.join(
-                basepath, f"dataset/{mood}{problem_size}_dataset.npy"
-            )
-            dataset = np.load(dataset_path)
-            demands, node_positions = dataset[:, :, 0], dataset[:, :, 1:]
-
-            n_instances = node_positions.shape[0]
-            logging.info(f"[*] Evaluating {dataset_path}")
-
-            objs = []
-            for i, (node_pos, demand) in enumerate(zip(node_positions, demands)):
-                obj = solve(node_pos, demand)
-                objs.append(obj.item())
-
-            print(f"[*] Average for {problem_size}: {np.mean(objs)}")
+        print("[*] Skip validation ...")
+        pass
