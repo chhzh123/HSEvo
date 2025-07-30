@@ -353,6 +353,7 @@ class HSEvo:
                           individual["exec_success"] and individual["obj"] < self.seed_ind["obj"]]
         else:
             population = [individual for individual in population if individual["exec_success"]]
+        print(f"[*] Population: {population}")
         if len(population) < 2:
             return None
         trial = 0
@@ -361,10 +362,11 @@ class HSEvo:
             parents = np.random.choice(population, size=2, replace=False)
             # If two parents have the same objective value, consider them as identical;
             # otherwise, add them to the selected population
-            if parents[0]["obj"] != parents[1]["obj"]:
-                selected_population.extend(parents)
+            # if parents[0]["obj"] != parents[1]["obj"]:
+            selected_population.extend(parents)
             if trial > 1000:
                 return None
+        print(f"[*] Selected Population: {selected_population}")
         return selected_population
 
     def flash_reflection(self, population: list[dict]) -> None:

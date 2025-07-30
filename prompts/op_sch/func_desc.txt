@@ -1,0 +1,40 @@
+## Input Format
+The input is provided in JSON format with the following structure:
+
+```json
+{
+  "name": "input",
+  "delay": {
+    "mul": 3,
+    "sub": 1
+  },
+  "resource": {
+    "mul": 2,
+    "sub": 1
+  },
+  "nodes": [
+    ["n1", "mul"],
+    ["n2", "mul"],
+    ["n3", "sub"]
+  ],
+  "edges": [
+    ["n1", "n3", "lhs"],
+    ["n2", "n3", "rhs"]
+  ]
+}
+```
+
+Where:
+- `name`: Name of the input graph
+- `delay`: Maps each resource type to its execution delay in cycles
+- `resource`: Maps each resource type to the number of available functional units
+- `nodes`: List of nodes, where each node is represented as `[node_id, resource_type]`
+- `edges`: List of edges, where each edge is represented as `[source_node, target_node, edge_name]`
+
+## Output Format
+The output should provide the execution schedule of the program, indicating the start cycle of each operation. For example, the following output means that `n1` and `n2` start at cycle 0, while `n3` starts at cycle 3:
+```
+n1:0
+n2:0
+n3:3
+```

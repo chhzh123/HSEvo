@@ -1,0 +1,399 @@
+def solve(input_file: str, solution_file: str):
+    import json
+    import collections
+
+    class HLSchedulerSolver:
+        def __init__(self, problem_data):
+            self.problem_data = problem_data
+            self.op_names_to_ids = {}
+            self.op_ids_to_names = {}
+            self.resource_names_to_ids = {}
+
+            self.num_ops = 0
+            self.op_delays = []
+            self.op_resource_types = []
+
+            self.num_resource_types = 0
+            self.resource_limits = []
+
+            self.adj = []
+            self.rev_adj = []
+            self.in_degree = []
+            self.out_degree = []
+
+            self._parse_input()
+
+        def _parse_input(self):
+            nodes_data = self.problem_data["nodes"]
+            self.num_ops = len(nodes_data)
+
+            for i, (name, _) in enumerate(nodes_data):
+                self.op_names_to_ids[name] = i
+                self.op_ids_to_names[i] = name
+
+            raw_delay_map = self.problem_data["delay"]
+            raw_resource_limit_map = self.problem_data["resource"]
+
+            current_res_id = 0
+            # Sort resource names for deterministic ID assignment (good practice)
+            sorted_resource_names = sorted(list(raw_delay_map.keys()))
+
+            for res_name in sorted_resource_names:
+                if (
+                    res_name not in self.resource_names_to_ids
+                ):  # Should always be true if building fresh
+                    self.resource_names_to_ids[res_name] = current_res_id
+                    self.resource_limits.append(raw_resource_limit_map[res_name])
+                    current_res_id += 1
+            self.num_resource_types = current_res_id
+
+            self.op_delays = [0] * self.num_ops
+            self.op_resource_types = [-1] * self.num_ops  # Init with -1 to catch errors
+            for i, (node_name, res_type_name) in enumerate(nodes_data):
+                op_id = self.op_names_to_ids[
+                    node_name
+                ]  # This is 'i' due to enumeration order
+                res_id = self.resource_names_to_ids[res_type_name]
+                self.op_resource_types[op_id] = res_id
+                self.op_delays[op_id] = raw_delay_map[res_type_name]
+
+            self.adj = [[] for _ in range(self.num_ops)]
+            self.rev_adj = [[] for _ in range(self.num_ops)]
+            self.in_degree = [0] * self.num_ops
+            self.out_degree = [0] * self.num_ops
+
+            for u_name, v_name, _ in self.problem_data["edges"]:
+                u = self.op_names_to_ids[u_name]
+                v = self.op_names_to_ids[v_name]
+                self.adj[u].append(v)
+                self.rev_adj[v].append(u)
+                self.in_degree[v] += 1
+                self.out_degree[u] += 1
+
+        def _compute_asap_times(self):
+            asap = [-1] * self.num_ops
+            queue = collections.deque()
+            current_in_degree = list(self.in_degree)  # Use a copy
+
+            for i in range(self.num_ops):
+                if current_in_degree[i] == 0:
+                    queue.append(i)
+                    asap[i] = 0
+
+            processed_count = 0
+            while queue:
+                u = queue.popleft()
+                processed_count += 1
+                for v_succ in self.adj[u]:
+                    asap[v_succ] = max(asap[v_succ], asap[u] + self.op_delays[u])
+                    current_in_degree[v_succ] -= 1
+                    if current_in_degree[v_succ] == 0:
+                        queue.append(v_succ)
+
+            if processed_count != self.num_ops and self.num_ops > 0:
+                # This indicates graph issues (cycles or disconnected parts not reachable from any source).
+                # Assume valid DAGs as per typical problem constraints.
+                # If any ASAP remains -1, it implies an unreachable node, which will cause issues.
+                pass
+
+            return asap
+
+        def _compute_alap_times(self, target_latency, asap_times):
+            alap = [float("inf")] * self.num_ops
+            queue = collections.deque()
+            current_out_degree = list(self.out_degree)  # Use a copy
+
+            for i in range(self.num_ops):
+                if current_out_degree[i] == 0:  # Sink nodes
+                    queue.append(i)
+                    alap[i] = target_latency - self.op_delays[i]
+
+            processed_count = 0
+            while queue:
+                u = queue.popleft()
+                processed_count += 1
+
+                # Ensure ALAP is not less than ASAP
+                alap[u] = max(alap[u], asap_times[u])
+                if (
+                    alap[u] < asap_times[u]
+                ):  # If this happens, target_latency is infeasible
+                    return None
+
+                for v_pred in self.rev_adj[u]:  # v_pred is a predecessor of u
+                    alap[v_pred] = min(alap[v_pred], alap[u] - self.op_delays[v_pred])
+                    current_out_degree[v_pred] -= 1
+                    if current_out_degree[v_pred] == 0:
+                        queue.append(v_pred)
+
+            if processed_count != self.num_ops and self.num_ops > 0:
+                # Graph issues
+                pass
+
+            # Final pass to ensure ALAP >= ASAP for all nodes and propagate constraints
+            for i in range(self.num_ops):
+                alap[i] = max(alap[i], asap_times[i])  # Apply ASAP constraint
+                if alap[i] < asap_times[i]:  # Critical check for correctness
+                    return None
+
+            return alap
+
+        def _compute_critical_path_lengths_to_sink(self):
+            # Length from START of node i to END of any sink node in the subgraph rooted at i.
+            cp_lengths = [
+                -1
+            ] * self.num_ops  # Initialize with a value indicating not computed
+            current_out_degree = list(self.out_degree)  # Use a copy
+            queue = collections.deque()
+
+            for i in range(self.num_ops):
+                if current_out_degree[i] == 0:  # Sink nodes
+                    queue.append(i)
+                    cp_lengths[i] = self.op_delays[
+                        i
+                    ]  # CP length for a sink is its own delay
+
+            processed_count = 0
+            while queue:
+                u = (
+                    queue.popleft()
+                )  # u is a node whose successors' CP lengths are known
+                processed_count += 1
+                for v_pred in self.rev_adj[u]:  # v_pred is a predecessor of u
+                    cp_lengths[v_pred] = max(
+                        cp_lengths[v_pred], self.op_delays[v_pred] + cp_lengths[u]
+                    )
+                    current_out_degree[v_pred] -= 1
+                    if current_out_degree[v_pred] == 0:
+                        queue.append(v_pred)
+
+            if processed_count != self.num_ops and self.num_ops > 0:
+                # Graph issues
+                pass
+
+            return cp_lengths
+
+        def _priority_function(
+            self, op_id, current_alap_times, critical_path_lengths_to_sink
+        ):
+            # Returns a tuple for sorting; smaller tuples have higher priority.
+            # 1. Smallest ALAP time (most urgent).
+            # 2. Largest critical path length from this node to a sink (most critical for overall latency).
+            #    Negative is used because sort is ascending.
+            # 3. Smallest operation ID (consistent tie-breaking).
+            return (
+                current_alap_times[op_id],
+                -critical_path_lengths_to_sink[op_id],
+                op_id,
+            )
+
+        def _list_schedule(self, target_latency, asap_times_static, cp_lengths_static):
+            min_latency_from_asap = 0
+            if self.num_ops > 0:
+                for i in range(self.num_ops):
+                    if asap_times_static[i] == -1:
+                        return None  # Unreachable node
+                    min_latency_from_asap = max(
+                        min_latency_from_asap, asap_times_static[i] + self.op_delays[i]
+                    )
+
+            if target_latency < min_latency_from_asap:
+                return None
+
+            alap_times = self._compute_alap_times(target_latency, asap_times_static)
+            if alap_times is None:
+                return None
+
+            scheduled_start_times = [-1] * self.num_ops
+            num_scheduled_ops = 0
+
+            # Resource usage array: resource_usage[resource_type_id][time_step]
+            # Sized for time steps 0 to target_latency-1.
+            if (
+                target_latency == 0
+            ):  # Handles num_ops = 0 case where target_latency can be 0
+                resource_usage = [[] for _ in range(self.num_resource_types)]
+            else:
+                resource_usage = [
+                    [0] * target_latency for _ in range(self.num_resource_types)
+                ]
+
+            ops_in_progress = {}  # op_id -> finish_time
+
+            # dynamic_in_degree tracks remaining direct predecessors that haven't *finished* yet.
+            current_in_degree_for_ready_check = list(self.in_degree)
+
+            ready_ops_set = set()  # Ops whose predecessors have all finished
+            for i in range(self.num_ops):
+                if self.in_degree[i] == 0:  # Source nodes are initially ready
+                    ready_ops_set.add(i)
+
+            current_time = 0
+            while num_scheduled_ops < self.num_ops:
+                # If current_time reaches target_latency, no more ops can start if they have delay >= 1,
+                # as they would finish beyond target_latency.
+                if current_time >= target_latency and target_latency > 0:
+                    return None  # Failed to schedule within target_latency
+
+                # Identify operations that finished exactly at current_time
+                ops_just_finished_this_step = []
+                for op_id_progress, finish_time in list(
+                    ops_in_progress.items()
+                ):  # list() for safe deletion
+                    if finish_time == current_time:
+                        ops_just_finished_this_step.append(op_id_progress)
+                        del ops_in_progress[op_id_progress]
+
+                # Update ready_ops_set with successors of finished operations
+                for op_id_finished in ops_just_finished_this_step:
+                    for successor_op_id in self.adj[op_id_finished]:
+                        current_in_degree_for_ready_check[successor_op_id] -= 1
+                        if current_in_degree_for_ready_check[successor_op_id] == 0:
+                            ready_ops_set.add(successor_op_id)
+
+                # Form candidate list from ready_ops_set for scheduling at current_time
+                candidate_ops_for_scheduling = []
+                for op_id in ready_ops_set:
+                    # Check ALAP constraint: op must start by its ALAP time.
+                    if current_time > alap_times[op_id]:
+                        return None  # This path leads to infeasible schedule for target_latency.
+
+                    # Check if op can finish by target_latency if started now.
+                    if current_time + self.op_delays[op_id] > target_latency:
+                        continue  # Cannot schedule this op at current_time; it would exceed target_latency.
+
+                    candidate_ops_for_scheduling.append(op_id)
+
+                # Sort candidates by priority
+                candidate_ops_for_scheduling.sort(
+                    key=lambda op_id_lambda: self._priority_function(
+                        op_id_lambda, alap_times, cp_lengths_static
+                    )
+                )
+
+                # Try to schedule candidates
+                for op_id_to_schedule in candidate_ops_for_scheduling:
+                    res_type = self.op_resource_types[op_id_to_schedule]
+                    delay = self.op_delays[op_id_to_schedule]
+
+                    # Check resource availability for duration [current_time, current_time + delay - 1]
+                    can_schedule_op = True
+                    # Delays d_i are positive integers (>= 1).
+                    for t_step in range(current_time, current_time + delay):
+                        if (
+                            resource_usage[res_type][t_step]
+                            >= self.resource_limits[res_type]
+                        ):
+                            can_schedule_op = False
+                            break
+
+                    if can_schedule_op:
+                        scheduled_start_times[op_id_to_schedule] = current_time
+                        num_scheduled_ops += 1
+                        ready_ops_set.remove(
+                            op_id_to_schedule
+                        )  # Remove from ready, it's now scheduled
+
+                        ops_in_progress[op_id_to_schedule] = current_time + delay
+
+                        for t_step in range(current_time, current_time + delay):
+                            resource_usage[res_type][t_step] += 1
+
+                if num_scheduled_ops == self.num_ops:
+                    break  # All operations scheduled
+
+                current_time += 1
+
+                # If ready_ops_set and ops_in_progress are both empty, but not all ops scheduled,
+                # it implies a disconnected graph or some other issue.
+                if (
+                    not ready_ops_set
+                    and not ops_in_progress
+                    and num_scheduled_ops < self.num_ops
+                ):
+                    return None  # Should not happen for valid connected DAGs
+
+            if num_scheduled_ops == self.num_ops:
+                # Verify actual latency of this schedule (should be <= target_latency)
+                actual_latency = 0
+                if self.num_ops > 0:  # Avoid max on empty sequence if num_ops is 0
+                    for i in range(self.num_ops):
+                        actual_latency = max(
+                            actual_latency, scheduled_start_times[i] + self.op_delays[i]
+                        )
+
+                if (
+                    actual_latency > target_latency
+                ):  # Should be caught by earlier checks
+                    return None
+
+                return scheduled_start_times
+            else:
+                return None  # Failed to schedule all ops
+
+        def run_solver(self):
+            if self.num_ops == 0:
+                return {}
+
+            # Pre-calculate ASAP times and Critical Path lengths as they are static.
+            asap_times_static = self._compute_asap_times()
+            cp_lengths_static = self._compute_critical_path_lengths_to_sink()
+
+            # Determine binary search range for latency
+            low = 0  # Lower bound for latency
+            for i in range(self.num_ops):
+                if asap_times_static[i] == -1:
+                    return {}  # Unreachable node implies bad graph
+                low = max(low, asap_times_static[i] + self.op_delays[i])
+
+            # Upper bound for latency: sum of all delays (loose, but safe)
+            # Or, if num_ops is 0, high should be 0.
+            high = sum(self.op_delays) if self.num_ops > 0 else 0
+            high = max(low, high)  # Ensure high is at least low.
+
+            best_schedule_array = None
+
+            # Binary search for the minimum latency
+            while low <= high:
+                mid_latency_target = (
+                    low + (high - low) // 2
+                )  # Avoids overflow with large low/high
+                schedule_attempt = self._list_schedule(
+                    mid_latency_target, asap_times_static, cp_lengths_static
+                )
+
+                if schedule_attempt is not None:
+                    # Found a feasible schedule for mid_latency_target
+                    best_schedule_array = schedule_attempt
+                    high = mid_latency_target - 1  # Try for an even smaller latency
+                else:
+                    # No schedule found for mid_latency_target
+                    low = mid_latency_target + 1  # Need to increase latency
+
+            # Format output
+            output_dict = {}
+            if best_schedule_array is not None:
+                for i in range(self.num_ops):
+                    op_name = self.op_ids_to_names[i]
+                    output_dict[op_name] = best_schedule_array[i]
+
+            return output_dict
+
+    with open(input_file, "r") as f:
+        problem_data_json = json.load(f)
+
+    solver_instance = HLSchedulerSolver(problem_data_json)
+    solution_dict = solver_instance.run_solver()
+
+    with open(solution_file, "w") as f:
+        if solution_dict:  # Check if solution is not empty (e.g. for empty graph)
+            output_lines = []
+            # Output in the order of nodes given in input "nodes" list for consistency
+            for node_name_in_order, _ in problem_data_json["nodes"]:
+                if (
+                    node_name_in_order in solution_dict
+                ):  # Should always be true if solution is complete
+                    output_lines.append(
+                        f"{node_name_in_order}:{solution_dict[node_name_in_order]}"
+                    )
+            f.write("\n".join(output_lines))

@@ -86,6 +86,7 @@ def multi_chat_completion(messages_list: list[list[dict]], n, model, temperature
         messages_list *= n
         n = 1
         num_workers = 2
+    num_workers = 1
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
         args = [(n, messages, model, temperature) for messages in messages_list]
@@ -102,6 +103,7 @@ def chat_completion(n: int, messages: list[dict], model: str, temperature: float
     """
     Generate n responses using OpenAI Chat Completions API
     """
+    print("Using model: ", model, "n: ", n, "temperature: ", temperature)
 
     for attempt in range(30):
         try:
@@ -119,28 +121,13 @@ def chat_completion(n: int, messages: list[dict], model: str, temperature: float
 
 def extract_code_from_generator(content):
     """Extract code from the response of the code generator."""
-    pattern_code = r'```python(.*?)```'
-    code_string = re.search(pattern_code, content, re.DOTALL)
-    code_string = code_string.group(1).strip() if code_string is not None else None
-    if code_string is None:
-        # Find the line that starts with "def" and the line that starts with "return", and extract the code in between
-        lines = content.split('\n')
-        start = None
-        end = None
-        for i, line in enumerate(lines):
-            if line.startswith('def'):
-                start = i
-            if 'return' in line:
-                end = i
-                break
-        if start is not None and end is not None:
-            code_string = '\n'.join(lines[start:end + 1])
-
-    if code_string is None:
-        return None
-    # Add import statements if not present
-    if "import" not in code_string:
-        code_string = "import numpy as np\nimport random\nimport math\nimport scipy\nimport torch\n" + code_string
+    code_string = None
+    pattern = r'```(?:python)?(.*?)```'
+    match = re.search(pattern, content, re.DOTALL)
+    if match:
+        code_string = match.group(1).strip()
+    else:
+        code_string = content
     return code_string
 
 
