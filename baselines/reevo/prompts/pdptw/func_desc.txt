@@ -1,0 +1,54 @@
+## Input Format
+An instance is stored in a `.txt` file with the format shown below. It consists of some meta data (e.g., instance name, number of vehicles, capacity), followed by three sections: `NODE_COORD_SECTION`, `PICKUP_AND_DELIVERY_SECTION`, and `DEPOT_SECTION`. Every file ends with a line `EOF`. 
+
+ 1. `NODE_COORD_SECTION` contains the coordinates of each location.
+ 2. `PICKUP_AND_DELIVERY_SECTION` contains the pick-up and delivery information, with each line of the form desribed below.
+    - The first number is the node index.
+    - The second number is the demand.
+    - The third and fourth numbers are the earliest and latest time for the node.
+    - The fifth number specifies the service time for the node.
+    - The sixth number is pickup sibling index if the node itself is a delivery node, and is 0 otherwise.
+    - The seventh number is the delivery sibling index if the node itself is a pickup node, and is 0 otherwise.
+3. `DEPOT_SECTION` specifies node indices for the departing and returning depot. 
+
+The following file is an example for instance `lc101`:
+```
+NAME : lc101
+TYPE : PDPTW
+DIMENSION : 107
+VEHICLES : 10
+CAPACITY : 200
+EDGE_WEIGHT_TYPE : EXACT_2D
+NODE_COORD_SECTION
+1 40 50
+2 45 68
+3 45 70
+...
+
+PICKUP_AND_DELIVERY_SECTION
+1 0 0 1236 0 0 0
+2 -10 912 967 90 12 0
+3 -20 825 870 90 7 0
+...
+
+DEPOT_SECTION
+1 
+-1
+EOF
+```
+
+## Output Format
+The first line of the output should provide the instance name. From the second line onwards, each line should represent a vehicle's route starting and ending at the depot node (i.e., 1). The following output shows an example solution to instance `lc101`. Note that this solution is for demonstrating the format and might not be valid.
+```
+lc101
+1 33 34 32 36 38 39 40 37 106 35 1
+1 82 79 105 77 72 71 74 78 80 81 1
+1 14 18 19 20 16 17 15 13 1
+1 6 4 8 9 11 12 10 7 5 3 2 76 1
+1 91 88 87 84 83 85 86 89 90 92 1
+1 68 66 64 63 75 73 62 65 103 69 67 70 1
+1 99 97 96 95 93 94 98 107 101 100 1
+1 58 56 55 54 57 59 61 60 1
+1 44 43 42 41 45 47 46 49 52 102 51 53 50 48 1
+1 21 25 26 28 30 31 29 27 24 104 23 22 1
+```
