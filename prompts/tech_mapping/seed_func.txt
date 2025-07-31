@@ -1,0 +1,290 @@
+def solve_v2(input_file: str, solution_file: str):
+    from collections import deque
+    class Node:
+        __slots__ = ('name','fanin_names','fanins','fanouts','patterns_one','patterns_zero','const_val')
+        def __init__(self,name):
+            self.name = name
+            self.fanin_names = []
+            self.fanins = []
+            self.fanouts = []
+            self.patterns_one = []
+            self.patterns_zero = []
+            self.const_val = None
+    raw_lines = open(input_file).read().splitlines()
+    lines = []
+    i = 0
+    while i < len(raw_lines):
+        line = raw_lines[i].rstrip()
+        if not line or line.lstrip().startswith('#'):
+            i += 1
+            continue
+        if line.endswith('\\'):
+            merged = line[:-1].rstrip()
+            i += 1
+            while i < len(raw_lines):
+                nxt = raw_lines[i].rstrip()
+                if nxt.endswith('\\'):
+                    merged += ' ' + nxt[:-1].rstrip()
+                    i += 1
+                else:
+                    merged += ' ' + nxt
+                    i += 1
+                    break
+            lines.append(merged)
+        else:
+            lines.append(line)
+            i += 1
+    model_name = ''
+    input_list = []
+    output_list = []
+    nodes = {}
+    idx = 0
+    while idx < len(lines):
+        l = lines[idx].strip()
+        if not l or l.startswith('#'):
+            idx += 1
+            continue
+        if l.startswith('.model'):
+            parts = l.split()
+            if len(parts) > 1:
+                model_name = parts[1]
+            idx += 1
+        elif l.startswith('.inputs'):
+            parts = l.split()
+            for name in parts[1:]:
+                input_list.append(name)
+                if name not in nodes:
+                    nodes[name] = Node(name)
+            idx += 1
+        elif l.startswith('.outputs'):
+            parts = l.split()
+            for name in parts[1:]:
+                output_list.append(name)
+            idx += 1
+        elif l.startswith('.names'):
+            parts = l.split()
+            in_names = parts[1:-1]
+            out_name = parts[-1]
+            if out_name not in nodes:
+                nodes[out_name] = Node(out_name)
+            node = nodes[out_name]
+            node.fanin_names = in_names[:]
+            patterns = []
+            j = idx + 1
+            while j < len(lines):
+                lj = lines[j].strip()
+                if not lj or lj.startswith('.') or lj.startswith('#'):
+                    break
+                patterns.append(lj)
+                j += 1
+            if len(in_names) == 0:
+                if patterns and patterns[0].strip() == '1':
+                    node.const_val = 1
+                else:
+                    node.const_val = 0
+            else:
+                for pline in patterns:
+                    parts2 = pline.split()
+                    if len(parts2) == 1:
+                        mask = parts2[0]; bit = '1'
+                    else:
+                        mask = parts2[0]; bit = parts2[1]
+                    if bit == '1':
+                        node.patterns_one.append(mask)
+                    else:
+                        node.patterns_zero.append(mask)
+            idx = j
+        elif l.startswith('.end'):
+            break
+        else:
+            idx += 1
+    for node in nodes.values():
+        node.fanins = []
+        for fn in node.fanin_names:
+            if fn in nodes:
+                node.fanins.append(nodes[fn])
+        node.fanouts = []
+    for node in nodes.values():
+        for f in node.fanins:
+            f.fanouts.append(node)
+    reachable = set()
+    dq = deque()
+    for out in output_list:
+        if out in nodes:
+            dq.append(out)
+    while dq:
+        u = dq.pop()
+        if u in reachable:
+            continue
+        reachable.add(u)
+        for f in nodes[u].fanins:
+            if f.name not in reachable:
+                dq.append(f.name)
+    nodes = {name:node for name,node in nodes.items() if name in reachable}
+    for node in nodes.values():
+        node.fanins = [f for f in node.fanins if f.name in nodes]
+        node.fanouts = [f for f in node.fanouts if f.name in nodes]
+    indeg = {name: len(node.fanins) for name,node in nodes.items()}
+    dq = deque([name for name,d in indeg.items() if d == 0])
+    topo_names = []
+    while dq:
+        u = dq.popleft()
+        topo_names.append(u)
+        for w in nodes[u].fanouts:
+            indeg[w.name] -= 1
+            if indeg[w.name] == 0:
+                dq.append(w.name)
+    topo_list = [nodes[name] for name in topo_names]
+    K = 6
+    def prune_cuts(cset):
+        cuts = list(cset)
+        res = []
+        for c in cuts:
+            skip = False
+            for d in cuts:
+                if d is not c and d.issubset(c):
+                    skip = True
+                    break
+            if not skip:
+                res.append(c)
+        return res
+    cuts = {}
+    for n in topo_list:
+        if not n.fanins:
+            cuts[n.name] = [frozenset([n.name])]
+        else:
+            cuts_n = None
+            for f in n.fanins:
+                cf = cuts[f.name]
+                if cuts_n is None:
+                    cuts_n = cf[:]
+                else:
+                    newset = set()
+                    for c1 in cuts_n:
+                        for c2 in cf:
+                            u = c1 | c2
+                            if len(u) <= K:
+                                newset.add(u)
+                    cuts_n = prune_cuts(newset)
+            if cuts_n is None:
+                cuts_n = []
+            cuts_set = set(cuts_n)
+            cuts_set.add(frozenset([n.name]))
+            cuts[n.name] = prune_cuts(cuts_set)
+    cost = {}
+    best_cut = {}
+    INF = 10**18
+    for n in topo_list:
+        if not n.fanins:
+            cost[n.name] = 0
+            best_cut[n.name] = None
+        else:
+            bcut = None
+            bval = INF
+            for c in cuts[n.name]:
+                if c == frozenset([n.name]):
+                    continue
+                s = 0
+                for m in c:
+                    s += cost.get(m,0)
+                cval = s + 1
+                if cval < bval:
+                    bval = cval; bcut = c
+            if bcut is None:
+                fl = frozenset([f.name for f in n.fanins])
+                bcut = fl
+                s = 0
+                for m in bcut:
+                    s += cost.get(m,0)
+                bval = s + 1
+            cost[n.name] = bval
+            best_cut[n.name] = bcut
+    mapping_nodes = set()
+    dq = deque()
+    for out in output_list:
+        if out in best_cut and best_cut[out] is not None:
+            dq.append(out)
+    while dq:
+        u = dq.pop()
+        if u in mapping_nodes:
+            continue
+        mapping_nodes.add(u)
+        c = best_cut[u]
+        if c:
+            for m in c:
+                if m in nodes:
+                    nm = nodes[m]
+                    if m not in input_list and nm.const_val is None:
+                        dq.append(m)
+    mapping_topo = [n for n in topo_list if n.name in mapping_nodes]
+    f = open(solution_file,'w')
+    f.write('.model '+model_name+'\n')
+    f.write('.inputs '+' '.join(input_list)+'\n')
+    f.write('.outputs '+' '.join(output_list)+'\n')
+    for n in mapping_topo:
+        leaves = best_cut[n.name]
+        inputs = sorted(leaves)
+        k = len(inputs)
+        N = 1<<k
+        full_mask = (1<<N) - 1
+        masks = []
+        for i in range(k):
+            m = 0
+            for j in range(N):
+                if (j>>i)&1:
+                    m |= (1<<j)
+            masks.append(m)
+        vis = set()
+        queue2 = [n.name]
+        while queue2:
+            u = queue2.pop()
+            if u in vis or u in inputs:
+                continue
+            vis.add(u)
+            for fn in nodes[u].fanins:
+                if fn.name not in vis:
+                    queue2.append(fn.name)
+        cone_nodes = [nodes[name] for name in topo_names if name in vis]
+        val = {}
+        for i,name in enumerate(inputs):
+            val[name] = masks[i]
+        for v in cone_nodes:
+            if v.const_val is not None:
+                val[v.name] = full_mask if v.const_val==1 else 0
+            else:
+                if v.patterns_zero:
+                    zero_mask = 0
+                    for p in v.patterns_zero:
+                        m = full_mask
+                        for idx,ch in enumerate(p):
+                            vm = val[v.fanin_names[idx]]
+                            if ch=='1':
+                                m &= vm
+                            elif ch=='0':
+                                m &= (~vm)&full_mask
+                        zero_mask |= m
+                    val[v.name] = (~zero_mask)&full_mask
+                else:
+                    one_mask = 0
+                    for p in v.patterns_one:
+                        m = full_mask
+                        for idx,ch in enumerate(p):
+                            vm = val[v.fanin_names[idx]]
+                            if ch=='1':
+                                m &= vm
+                            elif ch=='0':
+                                m &= (~vm)&full_mask
+                        one_mask |= m
+                    val[v.name] = one_mask
+        root_mask = val[n.name]
+        f.write('.names '+' '.join(inputs)+' '+n.name+'\n')
+        for j in range(N):
+            if (root_mask>>j)&1:
+                line = ''.join('1' if (j>>i)&1 else '0' for i in range(k))
+                f.write(line+' 1\n')
+    f.write('.end\n')
+    f.close()
+
+if __name__ == "__main__":
+    import sys
+    solve(sys.argv[1], sys.argv[2])
