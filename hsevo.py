@@ -116,12 +116,13 @@ class HSEvo:
             "code_path": f"problem_iter{self.iteration}_code0.py",
             "code": code,
             "response_id": 0,
+            "timeout": False,
         }
         self.seed_ind = seed_ind
         self.population = self.evaluate_population([seed_ind])
 
         # If seed function is invalid, stop
-        if not self.seed_ind["exec_success"]:
+        if not self.seed_ind["exec_success"] and not self.seed_ind["timeout"]:
             raise RuntimeError(f"Seed function is invalid. Please check the stdout file in {os.getcwd()}.")
 
         self.update_iter()
@@ -277,6 +278,7 @@ class HSEvo:
                     logging.info(f"Error for response_id {response_id}: {e}")
                     population[response_id] = self.mark_invalid_individual(population[response_id], str(e))
                     inner_run.kill()
+                    self.seed_ind["timeout"] = True
                     continue
 
                 stdout_filepath = individual["stdout_filepath"]
