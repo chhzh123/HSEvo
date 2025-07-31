@@ -1,0 +1,6 @@
+problem_name: pdptw
+problem_type: vrp
+obj_type: min
+problem_size: 1 # problem size for training
+func_name: solve
+description: The Pick-up and Delivery Problem with Time Windows (PDPTW) is a well-known combinatorial optimization problem that extends the classic Capacitated Vehicle Routing Problem (CVRP). In PDPTW, a fleet of vehicles is tasked with transporting goods or people from a set of pick-up locations to corresponding delivery locations, while adhering to specific time windows for both pick-ups and deliveries. The objective is to minimize the total distance traveled by the vehicles while ensuring that all constraints are satisfied. The problem is often seen in many real-world applications, such as logistics, transportation, and supply chain management. One example is the day-to-day operation of Amazon's last-mile delivery, where massive amount of packages are loaded to the trucks in a distribution center and delivered to various locations within a specified time frame. Meanwhile, to improve the efficiency a truck is usually allowed to pick up items (e.g., returned packages) along its route and carrt them back to the distribution center.

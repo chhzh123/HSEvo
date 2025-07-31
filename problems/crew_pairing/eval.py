@@ -13,11 +13,13 @@ from problems.crew_pairing.verifier import verify
 
 import gpt
 
+
 def get_heuristic_name(module, possible_names: list[str]):
     for func_name in possible_names:
         if hasattr(module, func_name):
             if inspect.isfunction(getattr(module, func_name)):
                 return func_name
+
 
 possible_func_names = ["solve", "solve_v1", "solve_v2", "solve_v3"]
 
@@ -97,7 +99,9 @@ def evaluate(input_file: str, solution_file: str) -> float:
 
     missing = set(legs) - covered
     if missing:
-        raise ValueError(f"Solution missing {len(missing)} legs (e.g., {next(iter(missing))}).")
+        raise ValueError(
+            f"Solution missing {len(missing)} legs (e.g., {next(iter(missing))})."
+        )
 
     # ---------- pay rates -------------------------------------------------
     duty_rate = instance.duty_cost_per_hour
@@ -128,12 +132,22 @@ def evaluate(input_file: str, solution_file: str) -> float:
         # close final duty
         duty_hours += HOURS(prev_arr - duty_start)
 
-        #total_cost += duty_hours * duty_rate + block_hours * pairing_rate
+        # total_cost += duty_hours * duty_rate + block_hours * pairing_rate
         pos_fee = 10_000 if leg_objs[0].dep_stn != BASE else 0.0
         total_cost += duty_hours * duty_rate + block_hours * pairing_rate + pos_fee
 
     return total_cost
 
+
+def solve_main(input_file: str, output_file: str):
+    print(f"[*] Input file: {input_file}")
+    heuristics(input_file, output_file)
+    print(f"[*] Output file: {output_file}")
+    is_valid, error_message = verify(input_file, output_file)
+    if not is_valid:
+        return float("inf")
+    cost = evaluate(input_file, output_file)
+    return cost
 
 
 if __name__ == "__main__":

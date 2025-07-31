@@ -72,7 +72,7 @@ def evaluate_datasets(folder_path: str, output_dir: str = None):
     json_files = []
     for root, dirs, files in os.walk(folder_path):
         for file in files:
-            if file.endswith('.csv'):
+            if file.endswith('.json'):
                 json_files.append(os.path.join(root, file))
     
     json_files = sorted(json_files)
@@ -101,7 +101,7 @@ def evaluate_datasets(folder_path: str, output_dir: str = None):
             output_file = os.path.join(output_dir, f"{dataset_name}.json")
         else:
             # Use same directory as input file
-            output_file = os.path.splitext(input_file)[0] + "_output.json"
+            output_file = os.path.splitext(input_file)[0] + "_output.out"
         
         print(f"\n[*] Processing dataset: {dataset_name}")
         

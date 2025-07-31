@@ -1,0 +1,6 @@
+problem_name: egraph
+problem_type: covering
+obj_type: min
+problem_size: 1 # problem size for training
+func_name: solve
+description: Term rewriting, widely employed in compiler optimizations and theorem proving, transforms programs into functionally equivalent but more efficient forms. Traditional methods apply the rewrites sequentially in a predetermined order, significantly affecting performance--a challenge known as the phase ordering problem. Equality saturation addresses the phase ordering issue by using the equivalence graph (e-graph), a data structure that compactly represents a set of expressions. Given an input program and a set of rewrite rules, e-graph construction is performed by applying the rules to the program, generating new expressions, and merging equivalent expressions. Once the e-graph is constructed (saturated), a good expression needs be extracted by selecting the most optimal one based on a cost model, which represents the optimized program.

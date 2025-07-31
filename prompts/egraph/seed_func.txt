@@ -1,0 +1,194 @@
+import json
+import math
+from collections import deque
+from concurrent.futures import ProcessPoolExecutor
+import os
+
+def solve(input_file: str, solution_file: str):
+    """
+    Solve the optimization problem.
+
+    Please do NOT change the function name and arguments.
+    Inputs should be read from input_file and outputs should be written to solution_file.
+    Input and output formats have been specified in the problem statement.
+    """
+    with open(input_file, 'r') as f:
+        data = json.load(f)
+
+    nodes_data_raw = data['nodes']
+    root_eclass_ids = data['root_eclasses']
+
+    # Build mappings and graph data structures
+    eclass_id_to_idx = {}
+    node_id_to_idx = {}
+    idx_to_node_id = []
+    
+    num_nodes = 0
+    num_eclasses = 0
+
+    # First pass to build mappings and count
+    for node_id, node_info in nodes_data_raw.items():
+        node_id_to_idx[node_id] = num_nodes
+        idx_to_node_id.append(node_id)
+        num_nodes += 1
+
+        eclass_id = node_info['eclass']
+        if eclass_id not in eclass_id_to_idx:
+            eclass_id_to_idx[eclass_id] = num_eclasses
+            num_eclasses += 1
+
+    # Now we know num_eclasses, initialize eclass_to_node_indices
+    eclass_to_node_indices = [[] for _ in range(num_eclasses)]
+
+    # Second pass to populate temp_nodes_data and eclass_to_node_indices
+    temp_nodes_data = []
+    for node_id, node_info in nodes_data_raw.items():
+        node_idx = node_id_to_idx[node_id]
+        eclass_idx = eclass_id_to_idx[node_info['eclass']]
+
+        temp_nodes_data.append({
+            'cost': float(node_info['cost']),
+            'eclass_idx': eclass_idx,
+            'child_node_ids': node_info['children'] # Store raw child node IDs
+        })
+        eclass_to_node_indices[eclass_idx].append(node_idx)
+
+    # Third pass to resolve child node IDs to unique child eclass indices
+    nodes_data = []
+    for node_idx in range(num_nodes):
+        node_info_temp = temp_nodes_data[node_idx]
+        child_eclass_indices_set = set()
+        for child_node_id in node_info_temp['child_node_ids']:
+            # Check if child_node_id exists in the graph
+            if child_node_id in node_id_to_idx:
+                 child_node_raw_info = nodes_data_raw[child_node_id]
+                 child_eclass_id = child_node_raw_info['eclass']
+                 # Check if child_eclass_id exists (should if node exists)
+                 if child_eclass_id in eclass_id_to_idx:
+                     child_eclass_indices_set.add(eclass_id_to_idx[child_eclass_id])
+                 # else: Warning for node pointing to non-existent eclass?
+            # else: Warning for node pointing to non-existent node?
+
+        nodes_data.append({
+            'cost': node_info_temp['cost'],
+            'eclass_idx': node_info_temp['eclass_idx'],
+            'child_eclass_indices': list(child_eclass_indices_set) # Store unique eclass indices
+        })
+
+    root_eclass_indices = [eclass_id_to_idx[eid] for eid in root_eclass_ids if eid in eclass_id_to_idx]
+
+    # DP Initialization
+    cost = [float('inf')] * num_eclasses
+    best_node_idx = [-1] * num_eclasses
+    epsilon = 1e-9 # Tolerance for floating point comparison
+    max_iterations = 10000 # Heuristic limit for convergence
+
+    # DP Iteration (Parallelized)
+
+    def compute_eclass_costs_chunk(eclass_indices_chunk, current_cost, nodes_data, eclass_to_node_indices):
+        """Computes new costs for a subset of e-classes."""
+        chunk_results = [] # List of (global_eclass_idx, new_cost_val, new_best_node_idx_val)
+        chunk_changed = False
+
+        for j in eclass_indices_chunk: # j is the global eclass index
+            min_cost_j = float('inf')
+            best_node_idx_j = -1
+
+            for node_idx in eclass_to_node_indices[j]:
+                current_node_cost = nodes_data[node_idx]['cost']
+                children_cost_sum = 0
+                valid_path = True
+                for child_eclass_idx in nodes_data[node_idx]['child_eclass_indices']:
+                    if math.isinf(current_cost[child_eclass_idx]):
+                        valid_path = False
+                        break
+                    children_cost_sum += current_cost[child_eclass_idx]
+
+                if valid_path:
+                    total_cost = current_node_cost + children_cost_sum
+                    # Use epsilon for comparison
+                    if total_cost < min_cost_j - epsilon:
+                        min_cost_j = total_cost
+                        best_node_idx_j = node_idx
+
+            # Check if the best found cost for this eclass is better than the current global cost
+            if min_cost_j < current_cost[j] - epsilon:
+                 chunk_results.append((j, min_cost_j, best_node_idx_j))
+                 chunk_changed = True
+            # No need to return unchanged eclasses, they keep their old values
+
+        return chunk_results, chunk_changed
+
+    # Determine number of workers
+    num_workers = os.cpu_count() or 1 # Use available cores
+
+    with ProcessPoolExecutor(max_workers=num_workers) as executor:
+        for k in range(max_iterations):
+            changed = False
+            
+            # Create chunks of eclass indices
+            eclass_indices = list(range(num_eclasses))
+            # Simple chunking: divide indices into num_workers parts
+            chunk_size = max(1, num_eclasses // num_workers)
+            chunks = [eclass_indices[i:i + chunk_size] for i in range(0, num_eclasses, chunk_size)]
+
+            # Submit tasks to the pool
+            # Pass necessary data to workers. current_best_node_idx is not needed in worker logic.
+            futures = [executor.submit(compute_eclass_costs_chunk, chunk, cost, nodes_data, eclass_to_node_indices) for chunk in chunks]
+
+            # Aggregate results
+            new_cost = cost[:] # Start with current costs
+            new_best_node_idx = best_node_idx[:] # Start with current best nodes
+
+            all_chunk_results = []
+            for future in futures:
+                all_chunk_results.append(future.result())
+
+            for chunk_results, chunk_changed_flag in all_chunk_results:
+                if chunk_changed_flag:
+                    changed = True
+                for j, min_cost_j, best_node_idx_j in chunk_results:
+                     # Update the global arrays
+                     new_cost[j] = min_cost_j
+                     new_best_node_idx[j] = best_node_idx_j
+
+            cost = new_cost
+            best_node_idx = new_best_node_idx
+
+            if not changed:
+                # print(f"Converged in {k+1} iterations.") # For debugging
+                break
+        # else:
+            # print(f"Did not converge within {max_iterations} iterations.") # For debugging
+
+
+    # Extraction
+    selected_node_indices = set()
+    q = deque()
+    processed_eclass_indices = set() # Use this to track e-classes whose best node has been processed
+
+    for root_eclass_idx in root_eclass_indices:
+        # Only start extraction from roots that are reachable (finite cost)
+        if not math.isinf(cost[root_eclass_idx]):
+            if root_eclass_idx not in processed_eclass_indices:
+                q.append(root_eclass_idx)
+                processed_eclass_indices.add(root_eclass_idx)
+
+    while q:
+        current_eclass_idx = q.popleft()
+        node_idx = best_node_idx[current_eclass_idx]
+
+        # Should have a valid best node if cost is finite and eclass was added to queue, but check anyway
+        if node_idx != -1:
+            selected_node_indices.add(node_idx)
+            for child_eclass_idx in nodes_data[node_idx]['child_eclass_indices']:
+                if child_eclass_idx not in processed_eclass_indices:
+                    q.append(child_eclass_idx)
+                    processed_eclass_indices.add(child_eclass_idx)
+
+    # Convert selected node indices back to string IDs
+    selected_node_ids = [idx_to_node_id[idx] for idx in selected_node_indices]
+
+    # Write output JSON
+    with open(solution_file, 'w') as f:
+        json.dump(selected_node_ids, f, indent=4)
