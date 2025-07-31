@@ -72,7 +72,7 @@ def evaluate_datasets(folder_path: str, output_dir: str = None):
     json_files = []
     for root, dirs, files in os.walk(folder_path):
         for file in files:
-            if file.endswith('.json'):
+            if file.endswith('.csv'):
                 json_files.append(os.path.join(root, file))
     
     json_files = sorted(json_files)
@@ -105,13 +105,13 @@ def evaluate_datasets(folder_path: str, output_dir: str = None):
         
         print(f"\n[*] Processing dataset: {dataset_name}")
         
-        try:
-            cost = solve_main(input_file, output_file)
-            results.append((dataset_name, cost))
-            print(f"[*] Cost for {dataset_name}: {cost}")
-        except Exception as e:
-            print(f"[!] Error processing {dataset_name}: {e}")
-            results.append((dataset_name, "ERROR"))
+        # try:
+        cost = solve_main(input_file, output_file)
+        results.append((dataset_name, cost))
+        print(f"[*] Cost for {dataset_name}: {cost}")
+        # except Exception as e:
+        #     print(f"[!] Error processing {dataset_name}: {e}")
+        #     results.append((dataset_name, "ERROR"))
     
     return results
 
