@@ -1,0 +1,97 @@
+## Input Format
+The input format is a JSON file containing with two required top‑level fields:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| **nodes** | object (map<string, NodeRecord>) | Dictionary whose keys are **node_id** strings. Each entry fully describes one node in the directed acyclic graph. |
+| **root_eclasses** | array<string> | List of **eclass** IDs that serve as roots of the computation (i.e., no parent references outside the set). |
+
+### nodes
+
+Every value in `nodes` is itself an object with the following schema, assuming the current node is $n_i$:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| **op** | string | Symbol or token representing the node’s operation. It can be a literal (e.g. `"add"`, `"mul"`). Can be ignored in this task. |
+| **cost** | number | Cost $c_i$ associated with this e-node, assuming it is a floating point number. |
+| **eclass** | string | The e-class that this e-node belongs to (i.e. $pa_i$) |
+| **children** | array<string> | List of **node_id** strings referencing the e-classes that this e-node belongs to (i.e. $ch_i$). |
+
+### root_eclasses
+The **root_eclasses** field is a list of strings, representing the IDs of the e-classes that are roots of the computation.
+i.e., $R = \{m_r\}$.
+In the examples following, the list only contains one root e-class, but in general, it can contain multiple root e-classes.
+
+
+### Example
+```
+{
+    "nodes": {
+        "0__0": {
+            "op": "0.1",
+            "cost": 0.1,
+            "eclass": "0",
+            "children": [
+                "1__0"
+            ]
+        },
+        "0__1": {
+            "op": "0.1",
+            "cost": 0.1,
+            "eclass": "0",
+            "children": [
+                "2__0"
+            ]
+        },
+        "1__0": {
+            "op": "0.1",
+            "cost": 0.1,
+            "eclass": "1",
+            "children": [
+                "3__0"
+            ]
+        },
+        "1__1": {
+            "op": "0.1",
+            "cost": 0.1,
+            "eclass": "1",
+            "children": []
+        },
+        "2__0": {
+            "op": "0.1",
+            "cost": 0.1,
+            "eclass": "2",
+            "children": [
+                "0__0"
+            ]
+        },
+        "2__1": {
+            "op": "0.1",
+            "cost": 0.1,
+            "eclass": "2",
+            "children": [
+                "3__0"
+            ]
+        },
+        "3__0": {
+            "op": "0.1",
+            "cost": 0.1,
+            "eclass": "3",
+            "children": []
+        }
+    },
+    "root_eclasses": [
+        "0"
+    ]
+}
+```
+
+## Output Format
+The solver function should output a string containing a list of all selected e-nodes in the format of `["node_id_1", "node_id_2", ...]`, where each `node_id` is a string representing the ID of the selected e-node.
+The order of the selected e-nodes in the output list does not matter.
+```
+[
+    "0__0",
+    "1__1",
+]
+```
