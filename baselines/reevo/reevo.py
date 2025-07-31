@@ -351,6 +351,8 @@ class ReEvo:
             better_ind, worse_ind = ind1, ind2
         elif ind1["obj"] > ind2["obj"]:
             better_ind, worse_ind = ind2, ind1
+        else:
+            better_ind, worse_ind = ind1, ind2
 
         worse_code = filter_code(worse_ind["code"])
         better_code = filter_code(better_ind["code"])

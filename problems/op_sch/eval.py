@@ -6,7 +6,8 @@ import numpy as np
 import inspect
 import glob
 
-sys.path.insert(0, "../../../")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+print(sys.path)
 
 from problems.op_sch.utils import parse_json, parse_schedule
 from problems.op_sch.verifier import verify
