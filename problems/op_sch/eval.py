@@ -71,7 +71,7 @@ if __name__ == "__main__":
 
     if mood == "train":
         print(f"[*] Dataset loaded.")
-        benchmark_dir = os.path.join(basepath, "datasets/operator_scheduling/demo")
+        benchmark_dir = os.path.join(basepath, "benchmark")
         results_dir = os.path.join(basepath, "results")
         os.makedirs(results_dir, exist_ok=True)
         input_files = sorted(glob.glob(os.path.join(benchmark_dir, "*.json")))
