@@ -42,12 +42,12 @@ if __name__ == "__main__":
 
     problem_size = int(sys.argv[1])
     root_dir = sys.argv[2]
-    mood = sys.argv[3]
-    assert mood in ["train", "val"]
+    mode = sys.argv[3]
+    assert mode in ["train", "val"]
 
     basepath = os.path.dirname(__file__)
 
-    if mood == "train":
+    if mode == "train" or mode == "val":
         print(f"[*] Dataset loaded.")
         benchmark_dir = os.path.join(basepath, "benchmark")
         results_dir = os.path.join(basepath, "results")
@@ -65,19 +65,5 @@ if __name__ == "__main__":
         # print(objs)
 
     else:
-        for problem_size in [20, 50, 100]:
-            dataset_path = os.path.join(
-                basepath, f"dataset/{mood}{problem_size}_dataset.npy"
-            )
-            dataset = np.load(dataset_path)
-            demands, node_positions = dataset[:, :, 0], dataset[:, :, 1:]
-
-            n_instances = node_positions.shape[0]
-            logging.info(f"[*] Evaluating {dataset_path}")
-
-            objs = []
-            for i, (node_pos, demand) in enumerate(zip(node_positions, demands)):
-                obj = solve(node_pos, demand)
-                objs.append(obj.item())
-
-            print(f"[*] Average for {problem_size}: {np.mean(objs)}")
+        print("[*] Invalid mode: Mode is neither train nor val ...")
+        pass

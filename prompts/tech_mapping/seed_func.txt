@@ -1,4 +1,4 @@
-def solve_v2(input_file: str, solution_file: str):
+def solve(input_file: str, solution_file: str):
     from collections import deque
     class Node:
         __slots__ = ('name','fanin_names','fanins','fanouts','patterns_one','patterns_zero','const_val')
@@ -284,7 +284,3 @@ def solve_v2(input_file: str, solution_file: str):
                 f.write(line+' 1\n')
     f.write('.end\n')
     f.close()
-
-if __name__ == "__main__":
-    import sys
-    solve(sys.argv[1], sys.argv[2])

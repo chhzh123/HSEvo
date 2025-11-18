@@ -5,3 +5,7 @@ venv/
 results/
 datasets/
 .env
+# abc
+abc.history
+# directory to check results on datasets
+check_result_on_all_dataset/

@@ -1,1 +1,1 @@
-def solve_v2(input_file: str, solution_file: str) -> None:
+def solve(input_file: str, solution_file: str) -> None:
